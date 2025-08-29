@@ -32,6 +32,7 @@ async function run() {
     const classScheduleCollection = db.collection('classSchedule');
     const studyPlansCollection = db.collection('studyPlans');
     const studyGoalsCollection = db.collection('studyGoals');
+    const courseMaterialsCollection = db.collection('courseMaterials');
 
     // Budget Tracker API Routes
 
@@ -311,6 +312,207 @@ async function run() {
         res.status(500).json({
           success: false,
           message: 'Error deleting class',
+          error: error.message
+        });
+      }
+    });
+
+    // Course Materials API Routes
+
+    // Get all course materials for a user
+    app.get('/api/course-materials/:userId', async (req, res) => {
+      try {
+        const { userId } = req.params;
+        const materials = await courseMaterialsCollection
+          .find({ userId })
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.json({
+          success: true,
+          data: materials
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          message: 'Error fetching course materials',
+          error: error.message
+        });
+      }
+    });
+
+    // Add a new course material
+    app.post('/api/course-materials', async (req, res) => {
+      try {
+        const { userId, title, type, links } = req.body;
+        
+        if (!userId || !title || !links || !Array.isArray(links) || links.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Required fields: userId, title, links (at least one)'
+          });
+        }
+
+        // Validate links structure - each link should have title and url
+        const validLinks = links.filter(link => 
+          link && 
+          typeof link === 'object' && 
+          link.title && 
+          link.title.trim() !== '' && 
+          link.url && 
+          link.url.trim() !== ''
+        );
+        
+        if (validLinks.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'At least one valid link with title and URL is required'
+          });
+        }
+
+        const newMaterial = {
+          userId,
+          title: title.trim(),
+          type: type || 'notes',
+          links: validLinks.map(link => ({
+            title: link.title.trim(),
+            url: link.url.trim()
+          })),
+          createdAt: new Date(),
+          lastAccessed: new Date()
+        };
+
+        const result = await courseMaterialsCollection.insertOne(newMaterial);
+        res.json({
+          success: true,
+          message: 'Course material added successfully',
+          data: { ...newMaterial, _id: result.insertedId }
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          message: 'Error adding course material',
+          error: error.message
+        });
+      }
+    });
+
+    // Update a course material
+    app.put('/api/course-materials/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { title, type, links } = req.body;
+        
+        if (!title || !links || !Array.isArray(links) || links.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Required fields: title, links (at least one)'
+          });
+        }
+
+        // Validate links structure - each link should have title and url
+        const validLinks = links.filter(link => 
+          link && 
+          typeof link === 'object' && 
+          link.title && 
+          link.title.trim() !== '' && 
+          link.url && 
+          link.url.trim() !== ''
+        );
+        
+        if (validLinks.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'At least one valid link with title and URL is required'
+          });
+        }
+
+        const updateData = {
+          title: title.trim(),
+          type: type || 'notes',
+          links: validLinks.map(link => ({
+            title: link.title.trim(),
+            url: link.url.trim()
+          })),
+          updatedAt: new Date()
+        };
+
+        const result = await courseMaterialsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updateData }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: 'Course material not found'
+          });
+        }
+
+        res.json({
+          success: true,
+          message: 'Course material updated successfully'
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          message: 'Error updating course material',
+          error: error.message
+        });
+      }
+    });
+
+    // Delete a course material
+    app.delete('/api/course-materials/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await courseMaterialsCollection.deleteOne({
+          _id: new ObjectId(id)
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: 'Course material not found'
+          });
+        }
+
+        res.json({
+          success: true,
+          message: 'Course material deleted successfully'
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          message: 'Error deleting course material',
+          error: error.message
+        });
+      }
+    });
+
+    // Update last accessed time for a course material
+    app.patch('/api/course-materials/:id/access', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await courseMaterialsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { lastAccessed: new Date() } }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: 'Course material not found'
+          });
+        }
+
+        res.json({
+          success: true,
+          message: 'Last accessed time updated'
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          message: 'Error updating access time',
           error: error.message
         });
       }
